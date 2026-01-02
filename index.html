@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Stacja Jarocin - Double Bounce</title>
+    <title>Stacja Jarocin</title>
     <style>
         /* --- BAZA --- */
         html, body {
@@ -19,36 +19,49 @@
             color: #ffffff;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
-            position: relative;
+            
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 5vh;
+            padding-bottom: 2vh;
+            box-sizing: border-box;
         }
 
-        /* --- 1. GÓRNY OBIEKT (LATAJĄCY ZEGAR) --- */
-        #floating-top {
-            position: absolute;
+        /* --- PAPIEŻ (JUMPSCARE + 21:37) --- */
+        #random-pope-img {
+            position: fixed; /* Zawsze na wierzchu */
             top: 0;
             left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover; /* Wypełnia cały ekran */
+            display: none; /* Domyślnie ukryty */
+            z-index: 9999; /* Najwyższa warstwa */
+            background-color: #ffcc00; /* Żółte tło pod spodem */
+        }
+
+        /* --- GÓRA (ZEGAR) --- */
+        .main-content {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            will-change: transform; 
-            padding: 1vh;
-            z-index: 1; 
         }
         
         #clock {
-            font-size: 30vh; 
+            font-size: 35vh; 
             font-weight: bold;
             line-height: 0.9;
             letter-spacing: -3px;
-            text-align: center;
+            margin: 0;
         }
         
         #date {
-            font-size: 5vh;
+            font-size: 6vh;
             margin-top: 1vh;
-            opacity: 0.9;
-            text-align: center;
+            opacity: 0.8;
+            font-weight: normal;
         }
 
         .current-weather {
@@ -56,36 +69,19 @@
             align-items: center;
             justify-content: center;
             gap: 2vh;
-            margin-top: 4vh;
+            margin-top: 5vh;
         }
 
-        #weather-icon { font-size: 10vh; }
-        #weather-text { font-size: 8vh; font-weight: bold; color: #ffcc00; }
+        #weather-icon { font-size: 12vh; }
+        #weather-text { font-size: 10vh; font-weight: bold; color: #ffcc00; }
 
-        /* --- 2. DOLNY KONTENER ("KLATKA" DLA PROGNOZY) --- */
-        .forecast-container-fixed {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 28vh; /* Ustalamy stałą wysokość, żeby zegar wiedział gdzie jest podłoga */
-            background-color: #000000; 
-            z-index: 100;
-            border-top: 2px solid #111; /* Bardzo ciemna linia oddzielająca */
-            overflow: hidden; /* Żeby prognoza nie wyleciała poza pasek */
-        }
-
-        /* --- 3. DOLNY OBIEKT (LATAJĄCA PROGNOZA) --- */
-        #forecast-row-moving {
-            position: absolute; /* To pozwala mu latać wewnątrz .forecast-container-fixed */
-            top: 0;
-            left: 0;
+        /* --- DÓŁ (PROGNOZA) --- */
+        .forecast-container {
+            width: 98%;
             display: flex;
             justify-content: center;
             gap: 1vw;
-            /* Zmniejszyłem szerokość do 90%, żeby miał miejsce na ruch lewo-prawo */
-            width: 90%; 
-            will-change: transform;
+            align-items: flex-end;
         }
 
         .day-card {
@@ -104,21 +100,20 @@
 </head>
 <body>
 
-    <div id="floating-top">
-        <div>
-            <div id="clock">00:00</div>
-            <div id="date">...</div>
-        </div>
+    <img id="random-pope-img" src="https://images.genius.com/7608922986c65480eac7bf1174833542.200x230x7.gif" alt="JP2">
+
+    <div class="main-content">
+        <div id="clock">00:00</div>
+        <div id="date">...</div>
+        
         <div class="current-weather">
             <div id="weather-icon">⏳</div>
             <div id="weather-text">Jarocin: --°</div> 
         </div>
     </div>
 
-    <div class="forecast-container-fixed" id="bottom-cage">
-        <div id="forecast-row-moving">
-            </div>
-    </div>
+    <div class="forecast-container" id="forecast-row">
+        </div>
 
     <script>
         // --- PEŁNY EKRAN ---
@@ -128,75 +123,86 @@
             }
         });
 
+        // Zmienna pomocnicza, żeby wiedzieć, czy trwa "godzina papieska"
+        let isPapalTime = false; 
+
         // ==================================================
-        // --- SILNIK FIZYCZNY (DWA OBIEKTY) ---
+        // --- LOGIKA LOSOWEGO PAPIEŻA (JUMPSCARE) ---
         // ==================================================
         
-        // KONFIGURACJA GÓRY (Zegar)
-        let topX = 50, topY = 50;
-        let topVX = 2.0, topVY = 2.0; // Prędkość góry
+        function scheduleRandomPope() {
+            // Losujemy czas: od 5 minut (300 000 ms) do 45 minut (2 700 000 ms)
+            // Dla testów możesz zmienić na mniejsze liczby
+            const minTime = 300000; 
+            const maxTime = 2700000; 
+            
+            const randomDelay = Math.floor(Math.random() * (maxTime - minTime + 1)) + minTime;
+            console.log(`Następny losowy atak za: ${randomDelay / 1000} sekund`);
 
-        // KONFIGURACJA DOŁU (Prognoza)
-        let botX = 10, botY = 10;
-        let botVX = 1.0, botVY = 0.8; // Prędkość dołu (wolniej, bo mało miejsca)
-
-        const topEl = document.getElementById('floating-top');
-        const botCage = document.getElementById('bottom-cage');
-        const botEl = document.getElementById('forecast-row-moving');
-
-        function animateDoubleBounce() {
-            // --- 1. OBLICZENIA DLA GÓRY (ZEGAR) ---
-            const maxTopW = window.innerWidth - topEl.offsetWidth;
-            // Podłoga dla zegara to góra dolnego paska
-            const maxTopH = window.innerHeight - botCage.offsetHeight - topEl.offsetHeight;
-
-            topX += topVX;
-            topY += topVY;
-
-            if (topX >= maxTopW || topX <= 0) topVX *= -1;
-            if (topY >= maxTopH || topY <= 0) topVY *= -1;
-
-            topEl.style.transform = `translate(${topX}px, ${topY}px)`;
-
-
-            // --- 2. OBLICZENIA DLA DOŁU (PROGNOZA) ---
-            // Prognoza lata TYLKO wewnątrz #bottom-cage
-            const maxBotW = botCage.offsetWidth - botEl.offsetWidth;
-            const maxBotH = botCage.offsetHeight - botEl.offsetHeight;
-
-            botX += botVX;
-            botY += botVY;
-
-            // Odbicia (z małym marginesem błędu, żeby nie utknęło)
-            if (botX >= maxBotW || botX <= 0) botVX *= -1;
-            if (botY >= maxBotH || botY <= 0) botVY *= -1;
-
-            botEl.style.transform = `translate(${botX}px, ${botY}px)`;
-
-
-            // Pętla animacji
-            requestAnimationFrame(animateDoubleBounce);
+            setTimeout(triggerPope, randomDelay);
         }
 
-        // Start z opóźnieniem (żeby załadowały się wymiary)
-        window.onload = () => {
-             setTimeout(animateDoubleBounce, 500);
-        };
+        function triggerPope() {
+            // Jeśli akurat jest 21:37, to nie robimy "mignięcia", bo obraz i tak ma być widoczny ciągle
+            if (isPapalTime) {
+                scheduleRandomPope(); // Próbuj znowu później
+                return;
+            }
+
+            const img = document.getElementById('random-pope-img');
+            
+            // 1. Pokaż (Jumpscare)
+            img.style.display = 'block';
+
+            // 2. Czekaj 2 sekundy i ukryj (chyba że w międzyczasie wybiła 21:37)
+            setTimeout(() => {
+                if (!isPapalTime) {
+                    img.style.display = 'none';
+                }
+                // 3. Zaplanuj kolejny atak
+                scheduleRandomPope();
+            }, 2000);
+        }
+
+        // Uruchom machinę losującą po starcie
+        scheduleRandomPope();
+
 
         // ==================================================
-        // --- DANE (Zegar i API) ---
+        // --- ZEGAR + LOGIKA 21:37 ---
         // ==================================================
         function updateTime() {
             const now = new Date();
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
+            
             document.getElementById('clock').textContent = `${hours}:${minutes}`;
             const options = { weekday: 'long', day: 'numeric', month: 'long' };
             document.getElementById('date').textContent = now.toLocaleDateString('pl-PL', options);
+
+            // --- SPRAWDZANIE GODZINY 21:37 ---
+            const img = document.getElementById('random-pope-img');
+
+            if (hours === '21' && minutes === '37') {
+                // Jeśli wybiła 21:37 i jeszcze nie włączyliśmy trybu:
+                if (!isPapalTime) {
+                    isPapalTime = true;
+                    img.style.display = 'block'; // Pokaż na stałe
+                }
+            } else {
+                // Jeśli minęła 21:37 (jest np. 21:38) i tryb był włączony:
+                if (isPapalTime) {
+                    isPapalTime = false;
+                    img.style.display = 'none'; // Ukryj
+                }
+            }
         }
         setInterval(updateTime, 1000);
         updateTime();
 
+        // ==================================================
+        // --- POGODA ---
+        // ==================================================
         function getIcon(code) {
             if (code === 0) return "☀️";
             if (code >= 1 && code <= 3) return "🌥️";
@@ -215,12 +221,14 @@
             try {
                 const response = await fetch(url);
                 const data = await response.json();
+                
                 const currentTemp = Math.round(data.current_weather.temperature);
                 const currentCode = data.current_weather.weathercode;
                 document.getElementById('weather-icon').textContent = getIcon(currentCode);
                 document.getElementById('weather-text').innerHTML = `Jarocin: ${currentTemp}°C`;
+
                 const daily = data.daily;
-                const container = document.getElementById('forecast-row-moving');
+                const container = document.getElementById('forecast-row');
                 container.innerHTML = ""; 
                 for(let i = 0; i <= 6; i++) {
                     const dateStr = daily.time[i];
@@ -230,7 +238,16 @@
                     const dateObj = new Date(dateStr);
                     let dayName = dateObj.toLocaleDateString('pl-PL', { weekday: 'short' });
                     dayName = dayName.replace('.', '');
-                    const dayHTML = `<div class="day-card"><div class="day-name">${dayName}</div><div class="day-icon">${getIcon(code)}</div><div class="day-temp">${maxTemp}°<span>${minTemp}°</span></div></div>`;
+
+                    const dayHTML = `
+                        <div class="day-card">
+                            <div class="day-name">${dayName}</div>
+                            <div class="day-icon">${getIcon(code)}</div>
+                            <div class="day-temp">
+                                ${maxTemp}°<span>${minTemp}°</span>
+                            </div>
+                        </div>
+                    `;
                     container.innerHTML += dayHTML;
                 }
             } catch (error) { console.log("Błąd:", error); }
