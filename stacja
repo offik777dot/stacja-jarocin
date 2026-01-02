@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <title>Stacja Jarocin</title>
+    <style>
+        /* Reset ustawień */
+        html {
+            background-color: #000000;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            font-family: 'Arial', sans-serif;
+            
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            text-align: center;
+            
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            padding: 2vh 0;
+            box-sizing: border-box;
+            
+            /* Obsługa Notcha */
+            padding-top: env(safe-area-inset-top); 
+            
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        
+        /* --- 1. ZEGAR --- */
+        #clock {
+            font-size: 40vh;
+            font-weight: bold;
+            line-height: 0.9;
+            margin: 0;
+            letter-spacing: -3px;
+            color: #ffffff;
+        }
+        
+        /* --- 2. DATA --- */
+        #date {
+            font-size: 7.5vh;
+            color: #ffffff;
+            opacity: 1;
+            margin-top: 4vh;
+            margin-bottom: 0;
+            font-weight: normal;
+        }
+
+        /* --- 3. POGODA TERAZ (ŻÓŁTA) --- */
+        .current-weather {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3vh;
+            flex-grow: 1;
+        }
+
+        #weather-icon { 
+            font-size: 15vh;
+        }
+
+        #weather-text {
+            font-size: 12vh;
+            font-weight: bold;
+            color: #ffcc00; /* Żółty */
+        }
+
+        /* --- 4. PROGNOZA (7 DNI) --- */
+        .forecast-row {
+            display: flex;
+            justify-content: center;
+            gap: 1vw;
+            width: 98%;
+            height: 25vh;
+            align-items: flex-end;
+            padding-bottom: 2vh;
+        }
+
+        .day-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 13vw;
+        }
+
+        .day-name {
+            font-size: 4vh;
+            color: #ffffff;
+            margin-bottom: 1vh;
+            font-weight: bold;
+        }
+        .day-icon {
+            font-size: 5.5vh;
+            margin-bottom: 1vh;
+        }
+        .day-temp {
+            font-size: 4vh;
+            font-weight: bold;
+            color: #ffffff;
+        }
+        .day-temp span { 
+            color: #dddddd;
+            font-weight: normal; 
+            font-size: 0.8em;
+            margin-left: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <div>
+        <div id="clock">00:00</div>
+        <div id="date">...</div>
+    </div>
+    
+    <div class="current-weather">
+        <div id="weather-icon">⏳</div>
+        <div id="weather-text">Jarocin: --°</div> 
+    </div>
+
+    <div class="forecast-row" id="forecast-container">
+        </div>
+
+    <script>
+        // --- PEŁNY EKRAN (Obsługa kliknięcia) ---
+        document.body.addEventListener('click', function() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(err);
+                });
+            }
+        });
+
+        // --- ZEGAR ---
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('clock').textContent = `${hours}:${minutes}`;
+            
+            const options = { weekday: 'long', day: 'numeric', month: 'long' };
+            document.getElementById('date').textContent = now.toLocaleDateString('pl-PL', options);
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // --- IKONY ---
+        function getIcon(code) {
+            if (code === 0) return "☀️";
+            if (code >= 1 && code <= 3) return "🌥️";
+            if (code === 45 || code === 48) return "🌫️";
+            if (code >= 51 && code <= 57) return "🌧️";
+            if (code >= 61 && code <= 67) return "🌧️";
+            if (code >= 71 && code <= 77) return "❄️";
+            if (code >= 80 && code <= 82) return "🌦️";
+            if (code === 85 || code === 86) return "🌨️";
+            if (code >= 95 && code <= 99) return "⛈️";
+            return "🌡️";
+        }
+
+        // --- POGODA ---
+        async function getWeather() {
+            const url = 'https://api.open-meteo.com/v1/forecast?latitude=51.972&longitude=17.502&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Europe%2FWarsaw';
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                // TERAZ
+                const currentTemp = Math.round(data.current_weather.temperature);
+                const currentCode = data.current_weather.weathercode;
+                document.getElementById('weather-icon').textContent = getIcon(currentCode);
+                document.getElementById('weather-text').innerHTML = `Jarocin: ${currentTemp}°C`;
+
+                // PROGNOZA
+                const daily = data.daily;
+                const container = document.getElementById('forecast-container');
+                container.innerHTML = ""; 
+
+                for(let i = 0; i <= 6; i++) {
+                    const dateStr = daily.time[i];
+                    const maxTemp = Math.round(daily.temperature_2m_max[i]);
+                    const minTemp = Math.round(daily.temperature_2m_min[i]);
+                    const code = daily.weathercode[i];
+                    
+                    const dateObj = new Date(dateStr);
+                    let dayName = dateObj.toLocaleDateString('pl-PL', { weekday: 'short' });
+                    dayName = dayName.replace('.', '');
+
+                    const dayHTML = `
+                        <div class="day-card">
+                            <div class="day-name">${dayName}</div>
+                            <div class="day-icon">${getIcon(code)}</div>
+                            <div class="day-temp">
+                                ${maxTemp}°<span>${minTemp}°</span>
+                            </div>
+                        </div>
+                    `;
+                    container.innerHTML += dayHTML;
+                }
+            } catch (error) { console.log("Błąd:", error); }
+        }
+        getWeather();
+        setInterval(getWeather, 900000); 
+    </script>
+</body>
+</html>
